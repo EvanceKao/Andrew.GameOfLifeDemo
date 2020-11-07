@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace GameHost1.Universes.Evance.Milestone3
 {
@@ -14,6 +16,7 @@ namespace GameHost1.Universes.Evance.Milestone3
         private Time _time;
         private Planet _planet;
         private SemaphoreSlim _evolvedSignal;
+        private ConcurrentBag<Life> _lives = new ConcurrentBag<Life>();
 
         public (int width, int depth) Dimation { get; }
 
@@ -101,8 +104,42 @@ namespace GameHost1.Universes.Evance.Milestone3
         {
             var lives = new List<Life>();
 
+            //// 初始化所有的生命
+            //foreach (var p in World.ForEachPos(init_matrix))
+            //{
+            //    var lifeSettings = new LifeSettings()
+            //    {
+            //        Time = this._time,
+            //        Planet = this._planet,
+            //        InitCoordinates = p,
+            //        InitIsAlive = init_matrix[p.x, p.y],
+            //        TimeSettings = new TimeSettings()
+            //        {
+            //            StartDelay = init_cell_start_frame[p.x, p.y],
+            //            Interval = init_cell_frame[p.x, p.y],
+            //        },
+            //        EvolvedSignal = _evolvedSignal,
+            //    };
+
+            //    var life = new Life(lifeSettings);
+
+            //    _planet.TryPutLife(life);
+            //}
+
+            var queue = new BlockingCollection<Life>();
+
+            Task.Run(() =>
+            {
+                foreach (var life in queue.GetConsumingEnumerable())
+                {
+                    _planet.TryPutLife(life);
+                }
+            });
+
+            int count = 0;
+
             // 初始化所有的生命
-            foreach (var p in World.ForEachPos(init_matrix))
+            Parallel.ForEach(World.ForEachPos(init_matrix), p =>
             {
                 var lifeSettings = new LifeSettings()
                 {
@@ -120,8 +157,42 @@ namespace GameHost1.Universes.Evance.Milestone3
 
                 var life = new Life(lifeSettings);
 
-                _planet.TryPutLife(life);
-            }
+                //_lives.Add(life);
+                queue.Add(life);
+
+                var currentCount = Interlocked.Increment(ref count);
+
+                Console.Write($"\r{currentCount}");
+            });
+
+            queue.CompleteAdding();
+
+            //foreach (var life in _lives.ToArray())
+            //{
+            //    _planet.TryPutLife(life);
+            //}
+
+            //foreach (var p in World.ForEachPos(init_matrix))
+            //{
+            //    var lifeSettings = new LifeSettings()
+            //    {
+            //        Time = this._time,
+            //        Planet = this._planet,
+            //        InitCoordinates = p,
+            //        InitIsAlive = init_matrix[p.x, p.y],
+            //        TimeSettings = new TimeSettings()
+            //        {
+            //            StartDelay = init_cell_start_frame[p.x, p.y],
+            //            Interval = init_cell_frame[p.x, p.y],
+            //        },
+            //        EvolvedSignal = _evolvedSignal,
+            //    };
+
+            //    var life = new Life(lifeSettings);
+
+            //    _planet.TryPutLife(life);
+            //}
+
 
             return lives;
         }

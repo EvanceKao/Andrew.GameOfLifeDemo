@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace GameHost1.Universes.Evance.Milestone3
 {
-    public class Life : ILife, IDisposable
+    public class Life : ILife, IObserver<TimeEventArgs>, IDisposable
     {
         private readonly ITimeReadOnly _time;
         private readonly IPlanetReadOnly _planet;
@@ -17,6 +17,7 @@ namespace GameHost1.Universes.Evance.Milestone3
         private TimeSpan _leftTimeForEvolving;
         private readonly TimeSpan _intervalTimespan;
         private bool isDisposed;
+        private IDisposable _unsubscriber;
 
         public bool IsAlive { get; private set; }
 
@@ -47,7 +48,7 @@ namespace GameHost1.Universes.Evance.Milestone3
 
             _evolvedSignal = _lifeSettings.EvolvedSignal;
 
-            _time.Elapsing += (sender, eventArgs) => this.TryEvolve(sender, eventArgs);
+            //_time.Elapsing += (sender, eventArgs) => this.TryEvolve(sender, eventArgs);
 
             //_time.Elapsing += async (sender, eventArgs) =>
             //{
@@ -63,7 +64,7 @@ namespace GameHost1.Universes.Evance.Milestone3
             //    _evolvedSignal.Release();
             //};
 
-
+            this.Subscribe(_time);
         }
 
         private void CheckSettings()
@@ -142,7 +143,8 @@ namespace GameHost1.Universes.Evance.Milestone3
                 if (disposing)
                 {
                     // TODO: 處置受控狀態 (受控物件)
-                    _time.Elapsing -= (sender, eventArgs) => this.TryEvolve(sender, eventArgs);
+                    //_time.Elapsing -= (sender, eventArgs) => this.TryEvolve(sender, eventArgs);
+                    Unsubscribe();
                 }
 
                 // TODO: 釋出非受控資源 (非受控物件) 並覆寫完成項
@@ -163,6 +165,31 @@ namespace GameHost1.Universes.Evance.Milestone3
             // 請勿變更此程式碼。請將清除程式碼放入 'Dispose(bool disposing)' 方法
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        public virtual void Subscribe(IObservable<TimeEventArgs> provider)
+        {
+            _unsubscriber = provider.Subscribe(this);
+        }
+
+        public virtual void Unsubscribe()
+        {
+            _unsubscriber?.Dispose();
+        }
+
+        public void OnCompleted()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void OnError(Exception error)
+        {
+            // Do nothing.
+        }
+
+        public void OnNext(TimeEventArgs value)
+        {
+            this.TryEvolve(_unsubscriber, value);
         }
     }
 }

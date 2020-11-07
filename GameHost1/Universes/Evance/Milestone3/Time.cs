@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,10 +15,14 @@ namespace GameHost1.Universes.Evance.Milestone3
         private volatile bool _elapseSignal = false;
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private bool isDisposed;
+        //private List<IObserver<TimeEventArgs>> _observers;
+        private ConcurrentDictionary<IObserver<TimeEventArgs>, object> _observers;
+        //private readonly object _syncLock = new object();
+        private readonly SemaphoreSlim _syncLock = new SemaphoreSlim(1, 1);
 
-        public event EventHandler<TimeEventArgs> Ready;
-        public event EventHandler<TimeEventArgs> Elapsing;
-        public event EventHandler<TimeEventArgs> Elapsed;
+        //public event EventHandler<TimeEventArgs> Ready;
+        //public event EventHandler<TimeEventArgs> Elapsing;
+        //public event EventHandler<TimeEventArgs> Elapsed;
 
         public int CurrentGeneration => _currentGeneration;
 
@@ -31,6 +37,8 @@ namespace GameHost1.Universes.Evance.Milestone3
             _timeSettings = timeSettings;
 
             _intervalTimespan = TimeSpan.FromMilliseconds(_timeSettings.Interval);
+
+            _observers = new ConcurrentDictionary<IObserver<TimeEventArgs>, object>();
 
             this.AutoElapse();
         }
@@ -66,27 +74,34 @@ namespace GameHost1.Universes.Evance.Milestone3
                 NextTime = this.CurrentTime.Add(_intervalTimespan),
             };
 
-            OnReady(timeEventArgs);
+            //OnReady(timeEventArgs);
 
-            OnElapsing(timeEventArgs);
+            //OnElapsing(timeEventArgs);
 
-            OnElapsed(timeEventArgs);
+            //OnElapsed(timeEventArgs);
+
+            //_syncLock.Wait();
+
+            foreach (var observer in _observers)
+                observer.Key.OnNext(timeEventArgs);
+
+            //_syncLock.Release();
         }
 
-        protected virtual void OnReady(TimeEventArgs e)
-        {
-            Ready?.Invoke(this, e);
-        }
+        //protected virtual void OnReady(TimeEventArgs e)
+        //{
+        //    Ready?.Invoke(this, e);
+        //}
 
-        protected virtual void OnElapsing(TimeEventArgs e)
-        {
-            Elapsing?.Invoke(this, e);
-        }
+        //protected virtual void OnElapsing(TimeEventArgs e)
+        //{
+        //    Elapsing?.Invoke(this, e);
+        //}
 
-        protected virtual void OnElapsed(TimeEventArgs e)
-        {
-            Elapsed?.Invoke(this, e);
-        }
+        //protected virtual void OnElapsed(TimeEventArgs e)
+        //{
+        //    Elapsed?.Invoke(this, e);
+        //}
 
         private void AutoElapse()
         {
@@ -148,6 +163,57 @@ namespace GameHost1.Universes.Evance.Milestone3
             // 請勿變更此程式碼。請將清除程式碼放入 'Dispose(bool disposing)' 方法
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        private class Unsubscriber : IDisposable
+        {
+            //private List<IObserver<TimeEventArgs>> _observers;
+            private ConcurrentDictionary<IObserver<TimeEventArgs>, object> _observers;
+
+            private IObserver<TimeEventArgs> _observer;
+            private readonly SemaphoreSlim _syncLock;
+
+            public Unsubscriber(
+                //List<IObserver<TimeEventArgs>> observers,
+                ConcurrentDictionary<IObserver<TimeEventArgs>, object> observers,
+                IObserver<TimeEventArgs> observer,
+                SemaphoreSlim syncLock)
+            {
+                this._observers = observers;
+                this._observer = observer;
+                this._syncLock = syncLock;
+            }
+
+            public void Dispose()
+            {
+                if (!(_observer == null))
+                {
+                    //_syncLock.Wait();
+
+                    _observers.TryRemove(_observer, out var obj);
+
+                    //_syncLock.Release();
+                }
+            }
+        }
+
+        public IDisposable Subscribe(IObserver<TimeEventArgs> observer)
+        {
+            //_syncLock.Wait();
+
+            //if (!_observers.Contains(observer))
+            //    _observers.Add(observer);
+
+            //_syncLock.Release();
+
+            if (!_observers.ContainsKey(observer))
+            {
+                _observers.TryAdd(observer, null);
+            }
+
+            return null;
+
+            return new Unsubscriber(_observers, observer, _syncLock);
         }
     }
 }
